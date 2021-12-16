@@ -1,0 +1,71 @@
+name: Build and Deploy Registrar to S3
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source branch (default `dev`, `dev`/`master`/'staging'/specific branch or tag)
+        default: 'dev'
+        required: true
+      environment:
+        description: Target environment on AWS (default `dev`, `dev`/`staging`/'prod'/other environnment)
+        default: 'dev'
+        required: true
+env:
+  SOURCE_REG: 'ghcr.io/velocitynetworkfoundation'
+  SOURCE_REF: ${{ github.event.inputs.ref }}
+  AWS_REGION: 'us-east-1'
+  STACK_NAME: 'velo'
+  ZONE: 'velocitycareerlabs.io'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout Repository
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ env.SOURCE_REF }}
+      # Set Common Variables
+      - name: Set Common Variables
+        run: bash ./eng/environments/common.sh
+      - name: Set S3 Bucket Prefix
+        run: echo 'AWS_S3_BUCKET=${{ env.STACK_NAME }}-fineractui-${{ github.event.inputs.environment }}' >> $GITHUB_ENV
+      # Setup Node & Restore Caches
+      - name: Copy .env file
+        run: |
+          cp ".env.${{ github.event.inputs.environment }}" "./.env"
+        working-directory: ./apps/registrar-app
+      # Remove surplus .env files
+      - name: Remove surplus .env file
+        run: |
+          rm .env.*
+        working-directory: ./apps/registrar-app
+      # Remove surplus .env files
+      - name: Directory listing
+        run: |
+          ls -al
+        working-directory: ./apps/registrar-app
+      # list env vars
+      - name: Env Listing
+        run: |
+          cat .env
+        working-directory: ./apps/registrar-app
+      # Install Dependencies
+      - name: Production Build
+        run: |
+          yarn build
+        
+      # SYNC to S3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy static site to S3 bucket
+        run: aws s3 sync ./apps/registrar-app/build/ s3://${{ env.AWS_S3_BUCKET }} --delete
+#      - name: Purge cache
+#        uses: jakejarvis/cloudflare-purge-action@master
+#        env:
+#           CLOUDFLARE_ZONE: ${{ env.ZONE }}
+#           CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
