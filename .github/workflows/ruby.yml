@@ -44,11 +44,11 @@ jobs:
       run: |
         gem install bundler
         gem install compass
-        bundle install
+        bundle install 
         ls
     - name: Build code to deploy
       run: |
-        grunt prod
+        grunt prod --force 
         ls
     - name: Run tests
       run: bundle exec rake
